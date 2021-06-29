@@ -11,6 +11,6 @@ compiler:
     version: 0.8.2
     remappings:
       - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@4.0.0"
-
-hypothesis:
-  max_examples: 1
+    optimizer:
+      enabled: true
+      runs: 800 #200

@@ -20,6 +20,7 @@ def bob(accounts):
 @pytest.fixture(scope="module", params=[8000000])
 def create_token(gov, alice, bob, request):
     sup = request.param
+
     def create_token(supply=sup):
         tok = gov.deploy(OverlayToken)
         tok.mint(gov, supply * 10 ** tok.decimals(), {"from": gov})

@@ -3,6 +3,7 @@ __pycache__
 .history
 .hypothesis/
 build/
+!tests/**/build/
 reports/
 node_modules
 temp.txt
@@ -12,4 +13,3 @@ hhtests
 artifacts
 cache
 hardhat.config.js
-

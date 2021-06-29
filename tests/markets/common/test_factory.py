@@ -22,13 +22,13 @@ def test_adjust_globals():
     pass
 
 
-#def test_update_market():
+# def test_update_market():
 #    pass
 
 
-#def test_mass_update_markets():
+# def test_mass_update_markets():
 #    pass
 
 
-#def test_set_uri():
+# def test_set_uri():
 #    pass

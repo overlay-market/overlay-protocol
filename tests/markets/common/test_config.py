@@ -1,4 +1,3 @@
-import pytest
 import re
 
 
@@ -40,7 +39,6 @@ def test_roles(token, gov, feed_owner, factory, market, alice, bob):
 
 def test_params(factory, market):
     # TODO: test all factory and market params set properly
-    #= factory.getGlobalParams()
     pass
 
 
@@ -51,7 +49,7 @@ def test_markets(factory, market):
 
 
 def test_market_is_enabled(factory, market):
-    assert factory.isMarket(market) == True
+    assert factory.isMarket(market) is True
 
 
 def test_market_erc1155(market):

@@ -10,8 +10,9 @@ contract OverlayV1MirinMarket is OverlayV1Market {
     using FixedPoint for FixedPoint.uq144x112;
 
     address public immutable mirinPool;
-    bool public immutable isPrice0;
     uint256 public immutable mirinPoolStartIndex;
+    // whether using price0Cumulative or price1Cumulative for TWAP
+    bool public immutable isPrice0;
     // window size for sliding window TWAP calc
     uint256 public immutable windowSize;
     // ideally value of ONE for tokenIn
@@ -20,14 +21,14 @@ contract OverlayV1MirinMarket is OverlayV1Market {
     constructor(
         address _ovl,
         address _mirinPool,
-        bool _isPrice0,
         uint256 _updatePeriod,
-        uint256 _windowSize,
         uint8 _leverageMax,
         uint16 _marginAdjustment,
         uint144 _oiCap,
         uint112 _fundingKNumerator,
         uint112 _fundingKDenominator,
+        bool _isPrice0,
+        uint256 _windowSize,
         uint256 _amountIn
     ) OverlayV1Market(
         "https://metadata.overlay.exchange/v1/mirin/{id}.json",
@@ -70,14 +71,14 @@ contract OverlayV1MirinMarket is OverlayV1Market {
             uint256 price0CumulativeEnd,
             uint256 price1CumulativeEnd
         ) = IMirinOracle(mirinPool).pricePoints(
-            mirinPoolStartIndex + pricePointCurrentIndex * updatePeriod
+            mirinPoolStartIndex + pricePoints.length * updatePeriod
         );
         (
             uint256 timestampStart,
             uint256 price0CumulativeStart,
             uint256 price1CumulativeStart
         ) = IMirinOracle(mirinPool).pricePoints(
-            mirinPoolStartIndex + pricePointCurrentIndex * updatePeriod - windowSize
+            mirinPoolStartIndex + pricePoints.length * updatePeriod - windowSize
         );
 
         if (isPrice0) {

@@ -4,7 +4,7 @@ import brownie
 from brownie.test import given, strategy
 
 
-ACCURACY = 1e-9 # 0.00001 bps acceptable error
+ACCURACY = 1e-9  # 0.00001 bps acceptable error
 
 
 @given(

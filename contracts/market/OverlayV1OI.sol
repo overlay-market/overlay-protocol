@@ -17,9 +17,9 @@ contract OverlayV1Oi {
     uint256 public oiShort;
 
     // total shares of long open interest outstanding
-    uint256 internal totalOiLongShares;
+    uint256 internal oiLongShares;
     // total shares of short open interest outstanding
-    uint256 internal totalOiShortShares;
+    uint256 internal oiShortShares;
 
     // queued long open interest to be settled at T+1
     uint256 public queuedOiLong;
@@ -41,6 +41,7 @@ contract OverlayV1Oi {
                 fundingKNumerator,
                 fundingKDenominator
             );
+            // TODO: decide if we want to change to unsafe math inside pow
             factor = FixedPoint.pow(f, m);
         }
     }
@@ -52,28 +53,47 @@ contract OverlayV1Oi {
         uint112 fundingKDenominator,
         uint256 elapsed
     ) internal returns (uint256 amountToBurn) {
+
+        // TODO: can we remove safemath in this call - would need another library function
         FixedPoint.uq144x112 memory fundingFactor = computeFundingFactor(
             fundingKDenominator - 2 * fundingKNumerator,
             fundingKDenominator,
             elapsed
         );
-        if (oiShort == 0) {
-            uint256 oiLongNow = fundingFactor.mul(oiLong).decode144();
-            amountToBurn = oiLong - oiLongNow;
-            oiLong = oiLongNow;
-        } else if (oiLong == 0) {
-            uint256 oiShortNow = fundingFactor.mul(oiShort).decode144();
-            amountToBurn = oiShort - oiShortNow;
-            oiShort = oiShortNow;
-        } else if (oiLong > oiShort) {
-            uint256 oiImbNow = fundingFactor.mul(oiLong - oiShort).decode144();
-            oiLong = (oiLong + oiShort + oiImbNow) / 2;
-            oiShort = (oiLong + oiShort - oiImbNow) / 2;
-        } else {
-            uint256 oiImbNow = fundingFactor.mul(oiShort - oiLong).decode144();
-            oiShort = (oiLong + oiShort + oiImbNow) / 2;
-            oiLong = (oiLong + oiShort - oiImbNow) / 2;
+
+        uint256 funding = oiLong;
+        uint256 funded = oiShort;
+
+        bool paidByShorts = funding <= funded;
+        if (paidByShorts) (funding, funded) = (funded, funding);
+
+        unchecked {
+
+            if (funded == 0) {
+                
+                // TODO: we can make an unsafe mul function here
+                uint256 oiNow = fundingFactor.mul(funding).decode144();
+                amountToBurn = funding - oiNow;
+
+                if (paidByShorts) oiShort = oiNow;
+                else oiLong = oiNow;
+
+            } else {
+
+                // TODO: we can make an unsafe mul function here
+                uint256 oiImbNow = fundingFactor.mul(funding - funded).decode144();
+                uint256 total = funding + funded;
+
+                funding = ( total + oiImbNow ) / 2;
+                funded = ( total - oiImbNow ) / 2;
+
+                if (paidByShorts) ( oiShort = funding, oiLong = funded );
+                else ( oiLong = funding, oiShort = funded );
+
+            }
+
         }
+
     }
 
     /// @notice Adds to queued open interest to prep for T+1 price settlement
@@ -92,8 +112,8 @@ contract OverlayV1Oi {
     function updateOi() internal {
         oiLong += queuedOiLong;
         oiShort += queuedOiShort;
-        totalOiLongShares += queuedOiLong;
-        totalOiShortShares += queuedOiShort;
+        oiLongShares += queuedOiLong;
+        oiShortShares += queuedOiShort;
 
         queuedOiLong = 0;
         queuedOiShort = 0;

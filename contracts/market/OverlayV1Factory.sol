@@ -2,10 +2,11 @@
 pragma solidity ^0.8.2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./OverlayV1MarketGeneralOracleMock.sol";
+
+import "../interfaces/IOverlayV1Market.sol";
 import "../OverlayToken.sol";
 
-contract OverlayV1FactoryGeneralOracleMock is Ownable {
+contract OverlayV1Factory is Ownable {
 
     uint16 public constant MIN_FEE = 1; // 0.01%
     uint16 public constant MAX_FEE = 100; // 1.00%
@@ -24,15 +25,15 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
     // portion of build/unwind fee burnt
     uint16 public feeBurnRate;
     // portion of non-burned fees to reward market updaters with (funding + price)
-    uint16 public feeRewardsRate;
+    uint16 public feeUpdateRewardsRate;
     // address to send fees to
     address public feeTo;
     // maintenance margin requirement
     uint16 public marginMaintenance;
-    // maintenance margin burn rate on liquidations
-    uint16 public marginBurnRate;
     // maintenance margin reward rate on liquidations
     uint16 public marginRewardRate;
+    // maintenance margin burn rate on liquidations
+    uint16 public marginBurnRate;
 
     // whether is a market AND is enabled
     mapping(address => bool) public isMarket;
@@ -44,10 +45,11 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
         address _ovl,
         uint16 _fee,
         uint16 _feeBurnRate,
-        uint16 _feeRewardsRate,
+        uint16 _feeUpdateRewardsRate,
         address _feeTo,
         uint16 _marginMaintenance,
-        uint16 _marginBurnRate
+        uint16 _marginBurnRate,
+        uint16 _marginRewardRate
     ) {
         // immutables
         ovl = _ovl;
@@ -55,45 +57,26 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
         // global params
         fee = _fee;
         feeBurnRate = _feeBurnRate;
-        feeRewardsRate = _feeRewardsRate;
+        feeUpdateRewardsRate = _feeUpdateRewardsRate;
         feeTo = _feeTo;
         marginMaintenance = _marginMaintenance;
         marginBurnRate = _marginBurnRate;
+        marginRewardRate = _marginRewardRate;
     }
 
-    /// @notice Creates a new market contract with spoofed prices
-    function createMarket(
-        bool isPrice0,
-        uint256[] memory prices,
-        uint256 updatePeriod,
-        uint8 leverageMax,
-        uint16 marginAdjustment,
-        uint144 oiCap,
-        uint112 fundingKNumerator,
-        uint112 fundingKDenominator
-    ) external onlyOwner returns (OverlayV1MarketGeneralOracleMock marketContract) {
-        marketContract = new OverlayV1MarketGeneralOracleMock(
-            ovl,
-            isPrice0,
-            prices,
-            updatePeriod,
-            leverageMax,
-            marginAdjustment,
-            oiCap,
-            fundingKNumerator,
-            fundingKDenominator
-        );
-
-        marketExists[address(marketContract)] = true;
-        isMarket[address(marketContract)] = true;
-        allMarkets.push(address(marketContract));
+    /// @notice Initializes an existing market contract after deployment
+    /// @dev Should be called after contract deployment in specific market factory.createMarket
+    function initializeMarket(address market) internal {
+        marketExists[market] = true;
+        isMarket[market] = true;
+        allMarkets.push(market);
 
         // Give market contract mint/burn priveleges for OVL
-        OverlayToken(ovl).grantRole(OverlayToken(ovl).MINTER_ROLE(), address(marketContract));
-        OverlayToken(ovl).grantRole(OverlayToken(ovl).BURNER_ROLE(), address(marketContract));
+        OverlayToken(ovl).grantRole(OverlayToken(ovl).MINTER_ROLE(), market);
+        OverlayToken(ovl).grantRole(OverlayToken(ovl).BURNER_ROLE(), market);
     }
 
-    /// @notice Disables an existing market contract 
+    /// @notice Disables an existing market contract for a mirin market
     function disableMarket(address market) external onlyOwner {
         require(isMarket[market], "OverlayV1: !enabled");
         isMarket[market] = false;
@@ -103,7 +86,7 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
         OverlayToken(ovl).revokeRole(OverlayToken(ovl).BURNER_ROLE(), market);
     }
 
-    /// @notice Enables an existing market contract 
+    /// @notice Enables an existing market contract for a mirin market
     function enableMarket(address market) external onlyOwner {
         require(marketExists[market], "OverlayV1: !exists");
         require(!isMarket[market], "OverlayV1: !disabled");
@@ -116,13 +99,13 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
 
     /// @notice Calls the update function on a market
     function updateMarket(address market, address rewardsTo) external {
-        OverlayV1MarketGeneralOracleMock(market).update(rewardsTo);
+        IOverlayV1Market(market).update(rewardsTo);
     }
 
     /// @notice Mass calls update functions on all markets
     function massUpdateMarkets(address rewardsTo) external {
         for (uint256 i=0; i < allMarkets.length; ++i) {
-            OverlayV1MarketGeneralOracleMock(allMarkets[i]).update(rewardsTo);
+            IOverlayV1Market(allMarkets[i]).update(rewardsTo);
         }
     }
 
@@ -136,7 +119,7 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
         uint112 fundingKNumerator,
         uint112 fundingKDenominator
     ) external onlyOwner {
-        OverlayV1MarketGeneralOracleMock(market).adjustParams(
+        IOverlayV1Market(market).adjustParams(
             updatePeriod,
             leverageMax,
             marginAdjustment,
@@ -150,34 +133,36 @@ contract OverlayV1FactoryGeneralOracleMock is Ownable {
     function adjustGlobalParams(
         uint16 _fee,
         uint16 _feeBurnRate,
-        uint16 _feeRewardsRate,
+        uint16 _feeUpdateRewardsRate,
         address _feeTo,
         uint16 _marginMaintenance,
-        uint16 _marginBurnRate
+        uint16 _marginBurnRate,
+        uint16 _marginRewardRate
     ) external onlyOwner {
         fee = _fee;
         feeBurnRate = _feeBurnRate;
-        feeRewardsRate = _feeRewardsRate;
+        feeUpdateRewardsRate = _feeUpdateRewardsRate;
         feeTo = _feeTo;
         marginMaintenance = _marginMaintenance;
         marginBurnRate = _marginBurnRate;
+        marginRewardRate = _marginRewardRate;
     }
 
-    function getUpdateParams () external view returns (
+    function getUpdateParams() external view returns (
         uint16,
         uint16,
         uint16,
         address
-    ) { 
+    ) {
         return (
             marginBurnRate,
             feeBurnRate,
-            feeRewardsRate,
+            feeUpdateRewardsRate,
             feeTo
         );
     }
 
-    function getMarginParams () external view returns (
+    function getMarginParams() external view returns (
         uint16,
         uint16
     ) {
