@@ -10,6 +10,10 @@ contract OverlayToken is AccessControl, ERC20("Overlay", "OVL") {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER");
   bytes32 public constant BURNER_ROLE = keccak256("BURNER");
 
+  // debt owed by address (non-transferrable)
+  mapping(address => uint256) private _debts;
+  uint256 private _totalDebt;
+
   constructor() {
     _setupRole(ADMIN_ROLE, msg.sender);
     _setupRole(MINTER_ROLE, msg.sender);
@@ -28,11 +32,40 @@ contract OverlayToken is AccessControl, ERC20("Overlay", "OVL") {
     _;
   }
 
+  /// @notice Mints tokens to total supply
   function mint(address _recipient, uint256 _amount) external onlyMinter {
       _mint(_recipient, _amount);
   }
 
+  /// @notice Burns tokens from total supply
   function burn(address _account, uint256 _amount) external onlyBurner {
       _burn(_account, _amount);
+  }
+
+  /// @notice Mints tokens to total supply, a portion of which is debt
+  function mintWithDebt(address _recipient, uint256 _amount, uint256 _debt) external onlyMinter {
+      require(_debt <= _amount, "debt > amount");
+      _debts[_recipient] += _debt;
+      _mint(_recipient, _amount);
+  }
+
+  /// @notice Burns tokens from total supply, a portion of which is debt
+  function burnWithDebt(address _account, uint256 _amount, uint256 _debt) external onlyBurner {
+      require(_debt <= _amount, "debt > amount");
+
+      uint256 debtBalance = _debts[_account];
+      require(debtBalance >= _debt, "debt burn amount exceeds outstanding debt");
+      _debts[_account] = debtBalance - _debt;
+      _burn(_account, _amount);
+  }
+
+  /// @notice Total debt outstanding
+  function totalDebt() public view returns (uint256) {
+      return _totalDebt;
+  }
+
+  /// @notice Debt associated with account
+  function debtOf(address _account) public view returns (uint256) {
+      return _debts[_account];
   }
 }
